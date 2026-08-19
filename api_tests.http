@@ -1,0 +1,27 @@
+### Health check
+GET http://localhost:8000/
+
+### List all documents
+GET http://localhost:8000/api/documents
+
+### List with search / limit
+GET http://localhost:8000/api/documents?q=policy
+GET http://localhost:8000/api/documents?limit=5
+
+### Get one document
+GET http://localhost:8000/api/documents/1
+
+### Get one — not found
+GET http://localhost:8000/api/documents/999
+
+### Update metadata
+PUT http://localhost:8000/api/documents/1
+Content-Type: application/json
+
+{
+  "approval_status": "Approved",
+  "category": "HR Policy"
+}
+
+### Delete a document
+DELETE http://localhost:8000/api/documents/1
