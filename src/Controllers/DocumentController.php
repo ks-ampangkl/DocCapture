@@ -44,6 +44,7 @@ final class DocumentController
     }
 
     /* ---------- POST /api/documents/upload — multipart file + metadata ---------- */
+
     public function create(Request $req, Response $res): Response
     {
         $uploadedFiles = $req->getUploadedFiles();
@@ -76,14 +77,18 @@ final class DocumentController
         ]);
         $id = (int)$pdo->lastInsertId();
 
-        // TODO (M3): call the Python sidecar /process-pdf with the stored path
-        // to extract text + page_count and update this row.
+        // Call the Python sidecar to extract page count
+        $sidecarResponse = $this->callSidecar('storage/uploads/' . $storedName);
+        error_log('SIDECAR RESPONSE: ' . var_export($sidecarResponse, true));
+        if ($sidecarResponse !== null && isset($sidecarResponse['page_count'])) {
+            $update = $pdo->prepare('UPDATE documents SET page_count = :pc WHERE id = :id');
+            $update->execute(['pc' => $sidecarResponse['page_count'], 'id' => $id]);
+        }
 
         $doc = $this->findById($id);
         return $this->json($res, ['message' => 'Document uploaded', 'data' => $doc], 201)
             ->withHeader('Location', '/api/documents/' . $id);
     }
-
     /* ---------- PUT /api/documents/{id} — metadata update, full or partial ---------- */
     public function update(Request $req, Response $res, array $args): Response
     {
@@ -149,4 +154,27 @@ final class DocumentController
         return $res->withHeader('Content-Type', 'application/json; charset=utf-8')
                     ->withStatus($status);
     }
+    private function callSidecar(string $storagePath): ?array
+{
+    $ch = curl_init('http://localhost:5000/process-pdf');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS     => json_encode(['storage_path' => $storagePath]),
+        CURLOPT_TIMEOUT        => 15,
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($response === false || $httpCode !== 200) {
+        // Don't fail the whole upload if the sidecar is down —
+        // the document is still saved, just without page_count for now.
+        return null;
+    }
+    return json_decode($response, true);
+}
+
+
 }
