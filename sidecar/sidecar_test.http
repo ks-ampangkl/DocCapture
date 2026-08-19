@@ -1,0 +1,24 @@
+###
+GET http://localhost:5000/
+Expected: 200, { "service": "DocCapture PDF Sidecar", "status": "ok" }
+
+###
+POST http://localhost:5000/process-pdf
+Content-Type: application/json
+
+{
+  "storage_path": "storage/uploads/doc_6a858ab48bddc_GLOBAL ENTERPRISE TECHNOLOGIES – HUMAN RESOURCES POLICY MANUAL.pdf"
+}
+
+###
+POST http://localhost:5000/process-pdf
+Content-Type: application/json
+
+{ "storage_path": "storage/uploads/does-not-exist.pdf" }
+
+###
+POST http://localhost:5000/process-pdf
+Content-Type: application/json
+
+{ "storage_path": "storage/uploads/does-not-exist.pdf" }
+

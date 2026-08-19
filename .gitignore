@@ -1,0 +1,19 @@
+# Python sidecar
+sidecar/venv/
+sidecar/__pycache__/
+sidecar/**/__pycache__/
+sidecar/faiss_index/
+sidecar/*.pyc
+
+# PHP API
+api/vendor/
+api/storage/uploads/*
+!api/storage/uploads/.gitkeep
+
+# Env files
+.env
+api/.env
+
+# OS junk
+.DS_Store
+Thumbs.db
