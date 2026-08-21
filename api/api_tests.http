@@ -41,3 +41,19 @@ POST http://localhost:8000/api/chat/submit
 Content-Type: application/json
 
 { "query": "What is the standard workweek?" }
+
+
+
+###
+POST http://localhost:5000/rag-query
+Content-Type: application/json
+
+{ "query": "What is the sexual harrassment policy state" }
+
+
+
+###
+POST http://localhost:5000/rag-query
+Content-Type: application/json
+
+{ "query": "I am an Enterprise Sales Rep trying to close a $150,000 contract next week. Am I allowed to purchase a premium $500 luxury gift basket for the client's executive stakeholder, and what is my maximum spend limit for the closing dinner?" } 

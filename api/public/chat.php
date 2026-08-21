@@ -31,43 +31,65 @@
     </div>
   </div>
 
-  <script>
-    document.getElementById('chat-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const input = document.getElementById('chat-input');
-      const messages = document.getElementById('messages');
-      const evidencePanel = document.getElementById('evidence-panel');
-      const query = input.value;
+ <script>
+document.getElementById('chat-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = document.getElementById('chat-input');
+  const messages = document.getElementById('messages');
+  const evidencePanel = document.getElementById('evidence-panel');
+  const query = input.value;
 
-      messages.innerHTML += `<div class="text-right"><span class="bg-blue-100 px-3 py-2 rounded inline-block">${query}</span></div>`;
-      input.value = '';
+  messages.innerHTML += `<div class="text-right"><span class="bg-blue-100 px-3 py-2 rounded inline-block">${query}</span></div>`;
+  input.value = '';
 
-      const res = await fetch('/api/chat/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
-      });
-      const data = await res.json();
+  const res = await fetch('/api/chat/submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query })
+  });
+  const data = await res.json();
 
-      const confBadge = data.confidence != null
-        ? `<span class="text-xs text-gray-400 block mt-1">Confidence: ${data.confidence}%</span>`
-        : '';
+  const confBadge = data.confidence != null
+    ? `<span class="text-xs text-gray-400 block mt-1">Confidence: ${data.confidence}%</span>`
+    : '';
 
-      messages.innerHTML += `<div class="text-left"><span class="bg-gray-100 px-3 py-2 rounded inline-block">${data.answer || data.error}</span>${confBadge}</div>`;
-      messages.scrollTop = messages.scrollHeight;
+  // NEW: conflict banner
+  let conflictBanner = '';
+  if (data.is_conflicting) {
+    const risk = (data.conflict_details?.risk_level || 'LOW').toUpperCase();
+    const bannerColor = risk === 'HIGH'
+      ? 'bg-red-100 border-red-400 text-red-800'
+      : 'bg-yellow-100 border-yellow-400 text-yellow-800';
+    const sources = (data.conflict_details?.conflicting_sources || []).join(' vs. ');
+    conflictBanner = `
+      <div class="border-l-4 ${bannerColor} p-3 rounded mb-2 text-sm">
+        <strong>⚠ Conflict Detected (${risk} risk)</strong><br>
+        ${data.conflict_details?.description || ''}<br>
+        <span class="text-xs italic">Sources: ${sources}</span>
+      </div>
+    `;
+  }
 
-      if (data.evidence && data.evidence.length) {
-        evidencePanel.innerHTML = data.evidence.map(ev => `
-          <div class="border rounded p-2">
-            <div class="font-medium text-gray-800">${ev.doc_name}</div>
-            <div class="text-xs text-gray-500 mb-1">Page ${ev.page}</div>
-            <div class="text-xs text-gray-600 italic">"${ev.excerpt}"</div>
-          </div>
-        `).join('');
-      } else {
-        evidencePanel.innerHTML = '<div class="text-gray-400">No sources found.</div>';
-      }
-    });
-  </script>
+  messages.innerHTML += `
+    <div class="text-left">
+      ${conflictBanner}
+      <span class="bg-gray-100 px-3 py-2 rounded inline-block">${data.answer || data.error}</span>${confBadge}
+    </div>
+  `;
+  messages.scrollTop = messages.scrollHeight;
+
+  if (data.evidence && data.evidence.length) {
+    evidencePanel.innerHTML = data.evidence.map(ev => `
+      <div class="border rounded p-2">
+        <div class="font-medium text-gray-800">${ev.doc_name}</div>
+        <div class="text-xs text-gray-500 mb-1">Page ${ev.page}</div>
+        <div class="text-xs text-gray-600 italic">"${ev.excerpt}"</div>
+      </div>
+    `).join('');
+  } else {
+    evidencePanel.innerHTML = '<div class="text-gray-400">No sources found.</div>';
+  }
+});
+</script>
 </body>
 </html>

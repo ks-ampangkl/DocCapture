@@ -51,7 +51,9 @@ def rag_query():
     return jsonify({
         "answer": result.get("answer", ""),
         "confidence": result.get("confidence", 0),
-        "evidence": result.get("evidence", [])
+        "evidence": result.get("evidence", []),
+        "is_conflicting": result.get("is_conflicting", False),
+        "conflict_details": result.get("conflict_details", {})
     })
 
 @app.route("/", methods=["GET"])
@@ -148,14 +150,12 @@ def process_pdf():
 
 
 def call_llm(query, retrieved_chunks):
-
     context = "\n\n".join(
-        f"[Source: {c['doc_name']}, Page {c['page_number']}]: {c['text']}"
+        f"[Source: {c.get('doc_name', 'Unknown')}, Page {c.get('page_number', '?')}]: {c['text']}"
         for c in retrieved_chunks
     )
 
-
-    prompt = f"""Answer the question using ONLY the context below. If the context doesn't contain the answer, say so clearly.
+    prompt = f"""Answer the question using ONLY the context below.
 
 Context:
 {context}
@@ -166,7 +166,7 @@ Instructions:
 - If multiple document versions give different answers, explain the history briefly, but the "answer" field must end with a clear, standalone conclusion stating what currently applies, in this exact format:
   "In conclusion, [direct answer to the question]. This is because [short reason]."
 - The conclusion must be the LAST sentence(s) of the "answer" field, after any historical context.
-- Keep the conclusion to 1-2 sentences, plain and unambiguous — someone skimming only the last line should get the right current answer.
+- Separately, evaluate whether the retrieved sources actually CONFLICT with each other (not just differ over time in a clearly superseded way, but genuinely disagree on a fact that matters right now).
 
 Respond with ONLY valid JSON in exactly this shape:
 {{
@@ -174,11 +174,19 @@ Respond with ONLY valid JSON in exactly this shape:
   "confidence": 85,
   "evidence": [
     {{"doc_name": "exact source name", "page": 4, "excerpt": "short relevant quote or paraphrase from that source"}}
-  ]
+  ],
+  "is_conflicting": false,
+  "conflict_details": {{
+    "conflicting_sources": [],
+    "description": "",
+    "risk_level": "NONE"
+  }}
 }}
 
 "confidence" is your own 0-100 estimate of how well the context supports the answer.
-If the context doesn't contain the answer, set "answer" to say so clearly (still ending with an "In conclusion..." sentence stating that no answer was found) and "confidence" to a low number like 10, with an empty "evidence" array."""
+"is_conflicting" is true ONLY if sources genuinely disagree on something that currently matters (e.g. two policies both claim to be current but state different numbers). If one document is clearly superseded/outdated and the current one is unambiguous, set "is_conflicting" to false.
+If "is_conflicting" is true, fill "conflict_details": list the exact conflicting document names in "conflicting_sources", a one-sentence "description" of what disagrees, and "risk_level" as one of "LOW", "MEDIUM", "HIGH" based on how consequential the disagreement is (e.g. compliance/legal/financial impact = HIGH).
+If the context doesn't contain the answer, set "answer" to say so clearly (still ending with an "In conclusion..." sentence) and "confidence" to a low number like 10, with an empty "evidence" array and "is_conflicting" false."""
 
     model = genai.GenerativeModel(
         "gemini-3.6-flash",
@@ -192,7 +200,9 @@ If the context doesn't contain the answer, set "answer" to say so clearly (still
         return {
             "answer": f"AI service temporarily unavailable: {str(e)}",
             "confidence": 0,
-            "evidence": []
+            "evidence": [],
+            "is_conflicting": False,
+            "conflict_details": {"conflicting_sources": [], "description": "", "risk_level": "NONE"}
         }
 
     return parsed
