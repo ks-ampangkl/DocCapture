@@ -34,26 +34,41 @@ def rag_query():
     query = data.get("query", "")
 
     if not query or not os.path.exists(INDEX_PATH):
-        return jsonify({"answer": "No documents indexed yet.", "confidence": 0, "evidence": []})
+        return jsonify({
+            "answer": "No documents indexed yet.",
+            "confidence": 0,
+            "evidence": [],
+            "is_conflicting": False,
+            "conflict_details": {"conflicting_sources": [], "description": "", "risk_level": "NONE"},
+            "completeness": 0
+        })
 
-    query_vec = model.encode([query], convert_to_numpy=True)
+    query_vec = model.encode([query], convert_to_numpy=True, normalize_embeddings=True)  # CHANGED
 
     index = faiss.read_index(INDEX_PATH)
     with open(META_PATH, "rb") as f:
         metadata = pickle.load(f)
 
     k = min(4, len(metadata))
-    distances, indices = index.search(query_vec, k)
+    similarities, indices = index.search(query_vec, k)  # now these are cosine similarities (0-1), not distances
     retrieved = [metadata[i] for i in indices[0] if i < len(metadata)]
+
+    # NEW: real confidence score = average cosine similarity of top N chunks
+    valid_sims = [similarities[0][j] for j in range(len(indices[0])) if indices[0][j] < len(metadata)]
+    confidence_score = round(min(float(sum(valid_sims) / len(valid_sims)), 1.0) * 100, 1) if valid_sims else 0
 
     result = call_llm(query, retrieved)
 
+    print("DEBUG - raw result from call_llm:", result)  # TEMPORARY
+
+
     return jsonify({
         "answer": result.get("answer", ""),
-        "confidence": result.get("confidence", 0),
+        "confidence": confidence_score,   # CHANGED: now from FAISS, not the LLM
         "evidence": result.get("evidence", []),
         "is_conflicting": result.get("is_conflicting", False),
-        "conflict_details": result.get("conflict_details", {})
+        "conflict_details": result.get("conflict_details", {}),
+        "completeness": result.get("completeness", 0)  
     })
 
 @app.route("/", methods=["GET"])
@@ -82,7 +97,7 @@ def embed_and_index(chunks):
         return
     os.makedirs("faiss_index", exist_ok=True)
     texts = [c["text"] for c in chunks]
-    embeddings = model.encode(texts, convert_to_numpy=True)
+    embeddings = model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)  # CHANGED
 
     if os.path.exists(INDEX_PATH):
         index = faiss.read_index(INDEX_PATH)
@@ -90,7 +105,7 @@ def embed_and_index(chunks):
             metadata = pickle.load(f)
     else:
         dim = embeddings.shape[1]
-        index = faiss.IndexFlatL2(dim)
+        index = faiss.IndexFlatIP(dim)   # CHANGED: was IndexFlatL2
         metadata = []
 
     index.add(embeddings)
@@ -154,7 +169,6 @@ def call_llm(query, retrieved_chunks):
         f"[Source: {c.get('doc_name', 'Unknown')}, Page {c.get('page_number', '?')}]: {c['text']}"
         for c in retrieved_chunks
     )
-
     prompt = f"""Answer the question using ONLY the context below.
 
 Context:
@@ -165,13 +179,12 @@ Question: {query}
 Instructions:
 - If multiple document versions give different answers, explain the history briefly, but the "answer" field must end with a clear, standalone conclusion stating what currently applies, in this exact format:
   "In conclusion, [direct answer to the question]. This is because [short reason]."
-- The conclusion must be the LAST sentence(s) of the "answer" field, after any historical context.
-- Separately, evaluate whether the retrieved sources actually CONFLICT with each other (not just differ over time in a clearly superseded way, but genuinely disagree on a fact that matters right now).
+- Separately, evaluate whether the retrieved sources actually CONFLICT with each other.
+- Also rate "completeness": does the retrieved context contain a full, direct answer to the question, or are there gaps (e.g. question asks about maternity leave, but context only covers annual leave)? Rate 0.0 (no relevant answer at all) to 1.0 (fully comprehensive answer).
 
 Respond with ONLY valid JSON in exactly this shape:
 {{
   "answer": "your answer here, ending with the required conclusion sentence",
-  "confidence": 85,
   "evidence": [
     {{"doc_name": "exact source name", "page": 4, "excerpt": "short relevant quote or paraphrase from that source"}}
   ],
@@ -180,14 +193,14 @@ Respond with ONLY valid JSON in exactly this shape:
     "conflicting_sources": [],
     "description": "",
     "risk_level": "NONE"
-  }}
+  }},
+  "completeness": 0.9
 }}
 
-"confidence" is your own 0-100 estimate of how well the context supports the answer.
-"is_conflicting" is true ONLY if sources genuinely disagree on something that currently matters (e.g. two policies both claim to be current but state different numbers). If one document is clearly superseded/outdated and the current one is unambiguous, set "is_conflicting" to false.
-If "is_conflicting" is true, fill "conflict_details": list the exact conflicting document names in "conflicting_sources", a one-sentence "description" of what disagrees, and "risk_level" as one of "LOW", "MEDIUM", "HIGH" based on how consequential the disagreement is (e.g. compliance/legal/financial impact = HIGH).
-If the context doesn't contain the answer, set "answer" to say so clearly (still ending with an "In conclusion..." sentence) and "confidence" to a low number like 10, with an empty "evidence" array and "is_conflicting" false."""
-
+"completeness" must be a float between 0.0 and 1.0.
+"is_conflicting" is true ONLY if sources genuinely disagree on something that currently matters. If one document is clearly superseded/outdated and the current one is unambiguous, set "is_conflicting" to false.
+If "is_conflicting" is true, fill "conflict_details" with exact conflicting document names, a one-sentence description, and risk_level ("LOW", "MEDIUM", "HIGH").
+If the context doesn't contain the answer, set completeness low (e.g. 0.1) and answer accordingly."""
     model = genai.GenerativeModel(
         "gemini-3.6-flash",
         generation_config={"response_mime_type": "application/json"}
@@ -199,10 +212,10 @@ If the context doesn't contain the answer, set "answer" to say so clearly (still
     except Exception as e:
         return {
             "answer": f"AI service temporarily unavailable: {str(e)}",
-            "confidence": 0,
             "evidence": [],
             "is_conflicting": False,
-            "conflict_details": {"conflicting_sources": [], "description": "", "risk_level": "NONE"}
+            "conflict_details": {"conflicting_sources": [], "description": "", "risk_level": "NONE"},
+            "completeness": 0
         }
 
     return parsed
