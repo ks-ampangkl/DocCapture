@@ -10,6 +10,7 @@
       <a href="/documents.php" class="font-semibold">Documents</a>
       <a href="/upload.php" class="text-blue-600 hover:underline">Upload</a>
       <a href="/chat.php" class="text-blue-600 hover:underline">Chat</a>
+      <a href="/dashboard.php" class="text-blue-600 hover:underline">Dashboard</a>
     </div>
 
     <div class="flex justify-between items-center mb-4">

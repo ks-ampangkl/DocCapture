@@ -53,7 +53,14 @@ Content-Type: application/json
 
 
 ###
+POST http://localhost:8000/api/chat/submit
+Content-Type: application/json
+
+{ "query": "Can I buy the $500 luxury gift basket for a client and expense a $1,500 dinner?" }
+
+
+###
 POST http://localhost:5000/rag-query
 Content-Type: application/json
 
-{ "query": "I am an Enterprise Sales Rep trying to close a $150,000 contract next week. Am I allowed to purchase a premium $500 luxury gift basket for the client's executive stakeholder, and what is my maximum spend limit for the closing dinner?" } 
+{ "query": "How many annual leave days do employees get?" }

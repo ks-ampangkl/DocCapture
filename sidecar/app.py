@@ -203,7 +203,7 @@ If "is_conflicting" is true, fill "conflict_details" with exact conflicting docu
 If the context doesn't contain the answer, set completeness low (e.g. 0.1) and answer accordingly."""
     model = genai.GenerativeModel(
         "gemini-3.6-flash",
-        generation_config={"response_mime_type": "application/json"}
+        generation_config={"response_mime_type": "application/json", "temperature":0}
     )
 
     try:

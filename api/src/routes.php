@@ -4,6 +4,7 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\App;
 use App\Controllers\DocumentController;
 use App\Controllers\ChatController;
+use App\Controllers\DashboardController;
 
 return function (App $app): void {
     $app->get('/', function (Request $r, Response $s) {
@@ -18,5 +19,6 @@ return function (App $app): void {
         $g->put   ('/documents/{id}',  [DocumentController::class, 'update']);
         $g->delete('/documents/{id}',  [DocumentController::class, 'delete']);
         $g->post('/chat/submit', [ChatController::class, 'submit']);
+        $g->get('/dashboard', [DashboardController::class, 'index']);
     });
 };

@@ -9,6 +9,7 @@
     <a href="/documents.php" class="text-blue-600 hover:underline">Documents</a>
     <a href="/upload.php" class="text-blue-600 hover:underline">Upload</a>
     <a href="/chat.php" class="font-semibold">Chat</a>
+    <a href="/dashboard.php" class="font-semibold">Dashboard</a>
   </div>
 
   <div class="max-w-5xl mx-auto grid grid-cols-3 gap-4">
